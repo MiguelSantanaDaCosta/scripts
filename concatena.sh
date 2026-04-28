@@ -8,6 +8,9 @@ MINIMAL_MODE=false
 LOGS=false
 FORMAT="txt"
 EXTENSIONS=""
+LANGUAGE=""
+MAX_SIZE=""
+COMPRESS=false
 
 EXCLUDE_DEFAULT=(
     ".git"
@@ -18,6 +21,24 @@ EXCLUDE_DEFAULT=(
     ".venv"
     "__pycache__"
 )
+
+# -------------------------
+# MAPA DE LINGUAGENS
+# -------------------------
+map_lang() {
+    case "$1" in
+        java) echo "java" ;;
+        python) echo "py" ;;
+        js|javascript) echo "js" ;;
+        ts|typescript) echo "ts" ;;
+        c) echo "c,h" ;;
+        cpp|c++) echo "cpp,hpp,h" ;;
+        go) echo "go" ;;
+        rust) echo "rs" ;;
+        bash|sh) echo "sh" ;;
+        *) echo "" ;;
+    esac
+}
 
 # -------------------------
 # HELP
@@ -45,6 +66,10 @@ OPÇÕES:
   -Tj, --tree-json         Árvore em JSON
 
   --ext <ext1,ext2>        Filtrar por extensões (ex: java,py,js)
+  --lang <lang>            Filtrar por linguagem (java, python, js, etc)
+  --max-size <size>        Limite de tamanho (ex: 100k, 2M, 1G)
+
+  -c, --compress           Compactar saída (.xz)
 
   -h, --help               Mostrar ajuda
 
@@ -59,7 +84,9 @@ EXEMPLOS:
   $0 -T
   $0 -Td
   $0 -Tj -m
-  $0 --ext java,py
+  $0 --lang java
+  $0 --ext js,ts --max-size 200k
+  $0 -m -nj -c
 
 EOF
 }
@@ -87,26 +114,28 @@ while [[ $# -gt 0 ]]; do
         -T|--tree) FORMAT="tree"; OUTPUT="estrutura.txt" ;;
         -Td|--tree-dirs) FORMAT="tree_dirs"; OUTPUT="estrutura_dirs.txt" ;;
         -Tj|--tree-json) FORMAT="tree_json"; OUTPUT="estrutura.json" ;;
-        --ext)
-            [[ -z "$2" ]] && { echo "Erro: --ext precisa de argumento"; exit 1; }
-            EXTENSIONS="$2"
-            shift
-            ;;
-        *)
-            echo "Parâmetro desconhecido: $1"
-            exit 1
-            ;;
+        --ext) EXTENSIONS="$2"; shift ;;
+        --lang) LANGUAGE="$2"; shift ;;
+        --max-size) MAX_SIZE="$2"; shift ;;
+        -c|--compress) COMPRESS=true ;;
+        *) echo "Parâmetro desconhecido: $1"; exit 1 ;;
     esac
     shift
 done
 
 # -------------------------
+# LANGUAGE → EXT
+# -------------------------
+if [[ -n "$LANGUAGE" ]]; then
+    mapped=$(map_lang "$LANGUAGE")
+    [[ -n "$mapped" ]] && EXTENSIONS="$mapped"
+fi
+
+# -------------------------
 # Minimal mode
 # -------------------------
 if $MINIMAL_MODE; then
-    for path in "${EXCLUDE_DEFAULT[@]}"; do
-        EXCLUDE+=("$path")
-    done
+    EXCLUDE+=("${EXCLUDE_DEFAULT[@]}")
 fi
 
 # -------------------------
@@ -116,13 +145,10 @@ if [[ "$FORMAT" == "tree" ]]; then
     $LOGS && echo "🌳 Gerando árvore..."
 
     TREE_CMD=(tree -a -h -p -D)
-
     $IGNORE_HIDDEN && TREE_CMD=(tree -h -p -D)
 
-    IGNORE_LIST=("${EXCLUDE[@]}")
-
-    if [[ ${#IGNORE_LIST[@]} -gt 0 ]]; then
-        TREE_CMD+=( -I "$(IFS='|'; echo "${IGNORE_LIST[*]}")" )
+    if [[ ${#EXCLUDE[@]} -gt 0 ]]; then
+        TREE_CMD+=( -I "$(IFS='|'; echo "${EXCLUDE[*]}")" )
     fi
 
     "${TREE_CMD[@]}" > "$OUTPUT"
@@ -142,7 +168,6 @@ if [[ "$FORMAT" == "tree_dirs" ]]; then
     done
 
     "${FIND_CMD[@]}" | sed 's|^\./||' > "$OUTPUT"
-
     echo "✔ Diretórios em $OUTPUT"
     exit 0
 fi
@@ -205,7 +230,7 @@ while IFS= read -r -d '' arquivo; do
         $match || continue
     fi
 
-    # EXTENSION FILTER
+    # EXTENSION / LANG
     if [[ -n "$EXTENSIONS" ]]; then
         match=false
         IFS=',' read -ra exts <<< "$EXTENSIONS"
@@ -215,9 +240,17 @@ while IFS= read -r -d '' arquivo; do
         $match || continue
     fi
 
-    # Ignora binários
+    # MAX SIZE
+    if [[ -n "$MAX_SIZE" ]]; then
+        if ! find "$arquivo" -size "-$MAX_SIZE" | grep -q .; then
+            $LOGS && echo "⏭️ grande: $rel"
+            continue
+        fi
+    fi
+
+    # BINÁRIO
     if file --mime "$arquivo" | grep -q binary; then
-        $LOGS && echo "⏭️ $rel"
+        $LOGS && echo "⏭️ binário: $rel"
         continue
     fi
 
@@ -251,3 +284,11 @@ done < <("${FIND_CMD[@]}" -print0)
 [[ "$FORMAT" == "json" ]] && echo '] }' >> "$OUTPUT"
 
 echo "✔ $COUNT arquivos → $OUTPUT"
+
+# -------------------------
+# COMPRESS
+# -------------------------
+if $COMPRESS; then
+    xz -9 "$OUTPUT"
+    echo "📦 Comprimido → $OUTPUT.xz"
+fi
