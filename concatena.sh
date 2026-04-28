@@ -6,7 +6,52 @@ EXCLUDE=()
 IGNORE_HIDDEN=false
 MINIMAL_MODE=false
 LOGS=false
-FORMAT="txt"   # txt | json | ndjson
+FORMAT="txt"
+
+# -------------------------
+# HELP
+# -------------------------
+show_help() {
+cat << EOF
+Uso: $(basename "$0") [OPÇÕES]
+
+Concatena arquivos de um diretório em um único arquivo (txt, JSON ou NDJSON).
+
+OPÇÕES:
+
+  -i, --include <path>     Incluir apenas caminhos específicos
+  -e, --exclude <path>     Excluir caminhos específicos
+  -nh, --no-hidden         Ignorar arquivos ocultos
+
+  -m, --minimal            Modo leve (ignora: .git, node_modules, build, etc.)
+  -l, --logs               Mostrar arquivos sendo processados
+
+  -j, --json               Saída em JSON (combinado.json)
+  -nj, --ndjson            Saída em NDJSON (combinado.ndjson)
+
+  -h, --help               Mostrar esta ajuda
+
+EXEMPLOS:
+
+  $(basename "$0") -m
+  $(basename "$0") -i src/ -e tests/
+  $(basename "$0") -m -nh -nj -l
+  $(basename "$0") --json
+
+DESCRIÇÃO:
+
+  - TXT (padrão): concatenação simples
+  - JSON: estrutura única com array de arquivos
+  - NDJSON: um JSON por linha (melhor para IA)
+
+OBS:
+
+  - Binários são ignorados automaticamente
+  - -j e -nj: o último definido prevalece
+  - -m adiciona exclusões padrão, mas não remove exclusões manuais
+
+EOF
+}
 
 # -------------------------
 # Função para escapar JSON
@@ -20,6 +65,10 @@ escape_json() {
 # -------------------------
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --help|-h)
+            show_help
+            exit 0
+            ;;
         --include|-i)
             [[ -z "$2" ]] && { echo "Erro: -i precisa de argumento"; exit 1; }
             INCLUDE+=("$2")
@@ -49,6 +98,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             echo "Parâmetro desconhecido: $1"
+            echo "Use --help para ver as opções."
             exit 1
             ;;
     esac
@@ -104,7 +154,6 @@ FIRST=true
 while IFS= read -r -d '' arquivo; do
     rel_path="${arquivo#./}"
 
-    # INCLUDE filter
     if [[ ${#INCLUDE[@]} -gt 0 ]]; then
         match=false
         for inc in "${INCLUDE[@]}"; do
@@ -113,7 +162,7 @@ while IFS= read -r -d '' arquivo; do
         $match || continue
     fi
 
-    # 🚫 Ignora binários (resolve erro de null byte)
+    # Ignora binários
     if file --mime "$arquivo" | grep -q binary; then
         $LOGS && echo "⏭️  Ignorando binário: $rel_path"
         continue
@@ -150,9 +199,6 @@ while IFS= read -r -d '' arquivo; do
 
 done < <("${FIND_CMD[@]}" -print0)
 
-# -------------------------
-# Finalização JSON
-# -------------------------
 if [[ "$FORMAT" == "json" ]]; then
     echo '] }' >> "$OUTPUT"
 fi
