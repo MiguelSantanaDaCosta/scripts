@@ -113,9 +113,13 @@ while IFS= read -r -d '' arquivo; do
         $match || continue
     fi
 
-    $LOGS && echo "📄 $rel_path"
+    # 🚫 Ignora binários (resolve erro de null byte)
+    if file --mime "$arquivo" | grep -q binary; then
+        $LOGS && echo "⏭️  Ignorando binário: $rel_path"
+        continue
+    fi
 
-    content=$(escape_json < "$arquivo")
+    $LOGS && echo "📄 $rel_path"
 
     case "$FORMAT" in
         txt)
@@ -131,10 +135,14 @@ while IFS= read -r -d '' arquivo; do
             else
                 echo ',' >> "$OUTPUT"
             fi
-            printf '{ "path": "%s", "content": "%s" }' "$rel_path" "$content" >> "$OUTPUT"
+            printf '{ "path": "%s", "content": "' "$rel_path" >> "$OUTPUT"
+            tr -d '\000' < "$arquivo" | escape_json >> "$OUTPUT"
+            printf '" }' >> "$OUTPUT"
             ;;
         ndjson)
-            printf '{"path":"%s","content":"%s"}\n' "$rel_path" "$content" >> "$OUTPUT"
+            printf '{"path":"%s","content":"' "$rel_path" >> "$OUTPUT"
+            tr -d '\000' < "$arquivo" | escape_json >> "$OUTPUT"
+            printf '"}\n' >> "$OUTPUT"
             ;;
     esac
 
