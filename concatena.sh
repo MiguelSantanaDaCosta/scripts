@@ -7,6 +7,7 @@ IGNORE_HIDDEN=false
 MINIMAL_MODE=false
 LOGS=false
 FORMAT="txt"
+EXTENSIONS=""
 
 EXCLUDE_DEFAULT=(
     ".git"
@@ -43,6 +44,8 @@ OPÇÕES:
   -Td, --tree-dirs         Apenas diretórios
   -Tj, --tree-json         Árvore em JSON
 
+  --ext <ext1,ext2>        Filtrar por extensões (ex: java,py,js)
+
   -h, --help               Mostrar ajuda
 
 EXCLUSÕES PADRÃO DO -m:
@@ -56,6 +59,7 @@ EXEMPLOS:
   $0 -T
   $0 -Td
   $0 -Tj -m
+  $0 --ext java,py
 
 EOF
 }
@@ -83,7 +87,15 @@ while [[ $# -gt 0 ]]; do
         -T|--tree) FORMAT="tree"; OUTPUT="estrutura.txt" ;;
         -Td|--tree-dirs) FORMAT="tree_dirs"; OUTPUT="estrutura_dirs.txt" ;;
         -Tj|--tree-json) FORMAT="tree_json"; OUTPUT="estrutura.json" ;;
-        *) echo "Parâmetro desconhecido: $1"; exit 1 ;;
+        --ext)
+            [[ -z "$2" ]] && { echo "Erro: --ext precisa de argumento"; exit 1; }
+            EXTENSIONS="$2"
+            shift
+            ;;
+        *)
+            echo "Parâmetro desconhecido: $1"
+            exit 1
+            ;;
     esac
     shift
 done
@@ -184,10 +196,21 @@ FIRST=true
 while IFS= read -r -d '' arquivo; do
     rel="${arquivo#./}"
 
+    # INCLUDE
     if [[ ${#INCLUDE[@]} -gt 0 ]]; then
         match=false
         for inc in "${INCLUDE[@]}"; do
             [[ "$rel" == "$inc"* ]] && match=true && break
+        done
+        $match || continue
+    fi
+
+    # EXTENSION FILTER
+    if [[ -n "$EXTENSIONS" ]]; then
+        match=false
+        IFS=',' read -ra exts <<< "$EXTENSIONS"
+        for ext in "${exts[@]}"; do
+            [[ "$arquivo" == *.$ext ]] && match=true && break
         done
         $match || continue
     fi
