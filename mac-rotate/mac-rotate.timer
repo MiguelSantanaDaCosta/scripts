@@ -1,0 +1,9 @@
+[Unit]
+Description=Rotaciona o MAC a cada 30 minutos
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=30min
+
+[Install]
+WantedBy=timers.target

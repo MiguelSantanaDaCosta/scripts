@@ -1,0 +1,11 @@
+# Link para o script principal
+sudo ln -sf ~/scripts/mac-rotate/mac.rotate.sh /usr/local/bin/mac-rotate
+
+# Links para os serviços do Systemd
+sudo ln -sf ~/scripts/mac-rotate/mac-rotate.service /etc/systemd/system/mac-rotate.service
+sudo ln -sf ~/scripts/mac-rotate/mac-rotate.timer /etc/systemd/system/mac-rotate.timer
+
+# Recarregar o daemon para reconhecer os novos arquivos
+sudo systemctl daemon-reload
+
+
