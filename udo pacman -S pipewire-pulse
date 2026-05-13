@@ -1,0 +1,29 @@
+[0;1;32m●[0m pipewire.service - PipeWire Multimedia Service
+     Loaded: loaded (]8;;file://santana/usr/lib/systemd/user/pipewire.service\/usr/lib/systemd/user/pipewire.service]8;;\; [0;1;38:5:185mdisabled[0m; preset: [0;1;32menabled[0m)
+     Active: [0;1;32mactive (running)[0m since Fri 2026-05-08 23:53:23 -03; 1min 8s ago
+ Invocation: 5b8eb2ee938a4cd792b4346a0b852e8c
+TriggeredBy: [0;1;32m●[0m pipewire.socket
+   Main PID: 14733 (pipewire)
+      Tasks: 3[0;38:5:245m (limit: 27972)[0m
+     Memory: 2.9M (peak: 3.2M)
+        CPU: 57ms
+     CGroup: /user.slice/user-1000.slice/user@1000.service/session.slice/pipewire.service
+             └─[0;38:5:245m14733 /usr/bin/pipewire[0m
+
+May 08 23:53:23 santana systemd[7242]: Started PipeWire Multimedia Service.
+
+[0;1;32m●[0m wireplumber.service - Multimedia Service Session Manager
+     Loaded: loaded (]8;;file://santana/usr/lib/systemd/user/wireplumber.service\/usr/lib/systemd/user/wireplumber.service]8;;\; [0;1;32menabled[0m; preset: [0;1;32menabled[0m)
+     Active: [0;1;32mactive (running)[0m since Fri 2026-05-08 23:53:23 -03; 1min 9s ago
+ Invocation: ccb7ab94353a440b9a7d2a60f6ab3ee7
+   Main PID: 14734 (wireplumber)
+      Tasks: 6[0;38:5:245m (limit: 27972)[0m
+     Memory: 7.4M (peak: 7.9M)
+        CPU: 245ms
+     CGroup: /user.slice/user-1000.slice/user@1000.service/session.slice/wireplumber.service
+             └─[0;38:5:245m14734 /usr/bin/wireplumber[0m
+
+May 08 23:53:23 santana systemd[7242]: Started Multimedia Service Session Manager.
+May 08 23:53:24 santana wireplumber[14734]: [0;1;38:5:185m[0;1;39m[0;1;38:5:185mspa.bluez5.native: RegisterProfile() failed: org.bluez.Error.NotPermitted[0m
+May 08 23:53:24 santana wireplumber[14734]: [0;1;39m[0;1;31m[0;1;39mwp-device: SPA handle 'api.libcamera.enum.manager' could not be loaded; is it installed?[0m
+May 08 23:53:24 santana wireplumber[14734]: [0;1;39m[0;1;31m[0;1;39ms-monitors-libcamera: PipeWire's libcamera SPA plugin is missing or broken. Some camera types may not be supported.[0m
