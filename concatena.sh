@@ -99,6 +99,28 @@ escape_json() {
 }
 
 # -------------------------
+# Formatar tamanho com precisão total (Base 1000)
+# -------------------------
+format_size() {
+    local bytes=$1
+    awk -v b="$bytes" '
+    BEGIN {
+        split("B KB MB GB TB", units);
+        i = 1;
+        val = b;
+        while (val >= 1000 && i < 5) {
+            val /= 1000;
+            i++;
+        }
+        # Formata com alta precisão decimal inicial
+        res = sprintf("%.12f", val);
+        # Remove os zeros sacrificáveis do final e o ponto se virar inteiro
+        sub(/\.?0+$/, "", res);
+        print res " " units[i];
+    }'
+}
+
+# -------------------------
 # Parse args
 # -------------------------
 while [[ $# -gt 0 ]]; do
@@ -288,7 +310,18 @@ echo "✔ $COUNT arquivos → $OUTPUT"
 # -------------------------
 # COMPRESS
 # -------------------------
+FINAL_OUTPUT="$OUTPUT"
 if $COMPRESS; then
     xz -9 "$OUTPUT"
-    echo "📦 Comprimido → $OUTPUT.xz"
+    FINAL_OUTPUT="$OUTPUT.xz"
+    echo "📦 Comprimido → $FINAL_OUTPUT"
+fi
+
+# -------------------------
+# EXIBIR TAMANHO DO ARQUIVO
+# -------------------------
+if [[ -f "$FINAL_OUTPUT" ]]; then
+    TAMANHO_BYTES=$(wc -c < "$FINAL_OUTPUT")
+    TAMANHO_FORMATADO=$(format_size "$TAMANHO_BYTES")
+    echo "⚖ Tamanho do arquivo: $TAMANHO_FORMATADO"
 fi
