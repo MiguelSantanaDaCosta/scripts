@@ -92,6 +92,14 @@ EOF
 }
 
 # -------------------------
+# Estimar tokens (Regra: ~4 caracteres por token)
+# -------------------------
+estimate_tokens() {
+    local char_count=$1
+    echo $((char_count / 4))
+}
+
+# -------------------------
 # JSON escape
 # -------------------------
 escape_json() {
@@ -238,11 +246,13 @@ for path in "${EXCLUDE[@]}"; do
 done
 
 COUNT=0
+TOTAL_LINES=0
 FIRST=true
 
 while IFS= read -r -d '' arquivo; do
     rel="${arquivo#./}"
 
+    # --- FILTROS ---
     # INCLUDE
     if [[ ${#INCLUDE[@]} -gt 0 ]]; then
         match=false
@@ -276,7 +286,12 @@ while IFS= read -r -d '' arquivo; do
         continue
     fi
 
+    # --- PROCESSAMENTO ---
     $LOGS && echo "📄 $rel"
+    
+    # Conta linhas e soma ao total
+    file_lines=$(wc -l < "$arquivo")
+    TOTAL_LINES=$((TOTAL_LINES + file_lines))
 
     case "$FORMAT" in
         txt)
@@ -305,23 +320,31 @@ done < <("${FIND_CMD[@]}" -print0)
 
 [[ "$FORMAT" == "json" ]] && echo '] }' >> "$OUTPUT"
 
-echo "✔ $COUNT arquivos → $OUTPUT"
+echo "✔ $COUNT arquivos ($TOTAL_LINES linhas) → $OUTPUT"
+
 
 # -------------------------
-# COMPRESS
+# COMPRESS & ESTATÍSTICAS
 # -------------------------
-FINAL_OUTPUT="$OUTPUT"
+CHAR_COUNT=$(wc -m < "$OUTPUT")
+TOKENS=$(estimate_tokens "$CHAR_COUNT")
+
 if $COMPRESS; then
     xz -9 "$OUTPUT"
     FINAL_OUTPUT="$OUTPUT.xz"
     echo "📦 Comprimido → $FINAL_OUTPUT"
+else
+    FINAL_OUTPUT="$OUTPUT"
 fi
 
-# -------------------------
-# EXIBIR TAMANHO DO ARQUIVO
-# -------------------------
+# Exibir Estatísticas Finais
 if [[ -f "$FINAL_OUTPUT" ]]; then
     TAMANHO_BYTES=$(wc -c < "$FINAL_OUTPUT")
     TAMANHO_FORMATADO=$(format_size "$TAMANHO_BYTES")
+    
+    echo "-----------------------------------"
     echo "⚖ Tamanho do arquivo: $TAMANHO_FORMATADO"
+    echo "🧠 Estimativa de tokens: ~$TOKENS"
+    echo "📊 Total processado: $COUNT arquivos ($TOTAL_LINES linhas)"
+    echo "-----------------------------------"
 fi
