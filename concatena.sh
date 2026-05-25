@@ -354,6 +354,24 @@ fi
 echo "✔ $COUNT arquivos ($TOTAL_LINES linhas) → $OUTPUT"
 
 # -------------------------
+# CLIPBOARD REFORÇADO
+# -------------------------
+if $COPY_TO_CLIPBOARD; then
+    if command -v wl-copy >/dev/null 2>&1; then
+        cat "$OUTPUT" | wl-copy
+        echo "📋 Conteúdo copiado para o clipboard (Wayland/wl-clipboard)."
+    elif command -v xclip >/dev/null 2>&1; then
+        cat "$OUTPUT" | xclip -selection clipboard
+        echo "📋 Conteúdo copiado para o clipboard (X11/xclip)."
+    elif command -v pbcopy >/dev/null 2>&1; then
+        cat "$OUTPUT" | pbcopy
+        echo "📋 Conteúdo copiado para o clipboard (pbcopy)."
+    else
+        echo "⚠️ Erro: Nenhum utilitário de clipboard encontrado (instale wl-clipboard ou xclip)."
+    fi
+fi
+
+# -------------------------
 # COMPRESS & ESTATÍSTICAS
 # -------------------------
 CHAR_COUNT=$(wc -m < "$OUTPUT")
@@ -385,17 +403,4 @@ if $DRY_RUN; then
     exit 0
 fi
 
-# -------------------------
-# CLIPBOARD
-# -------------------------
-if $COPY_TO_CLIPBOARD; then
-    if command -v xclip >/dev/null 2>&1; then
-        cat "$OUTPUT" | xclip -selection clipboard
-        echo "📋 Conteúdo copiado para o clipboard (xclip)."
-    elif command -v pbcopy >/dev/null 2>&1; then
-        cat "$OUTPUT" | pbcopy
-        echo "📋 Conteúdo copiado para o clipboard (pbcopy)."
-    else
-        echo "⚠️ Erro: Comando de clipboard (xclip ou pbcopy) não encontrado."
-    fi
-fi
+
