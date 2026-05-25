@@ -11,6 +11,7 @@ EXTENSIONS=""
 LANGUAGE=""
 MAX_SIZE=""
 COMPRESS=false
+DRY_RUN=false
 
 EXCLUDE_DEFAULT=(
     ".git"
@@ -40,6 +41,20 @@ map_lang() {
     esac
 }
 
+COPY_TO_CLIPBOARD=false
+
+# -------------------------
+# Clipboard e Entropia
+# -------------------------
+# Retorna uma pontuação de 0 a 100. Valores muito baixos indicam "minificação" (código ilegível)
+calculate_entropy() {
+    local file=$1
+    local total=$(wc -c < "$file")
+    [[ "$total" -eq 0 ]] && echo 0 && return
+    local unique=$(tr -dc '[:print:]' < "$file" | fold -w1 | sort -u | wc -l)
+    echo $(( (unique * 100) / total ))
+}
+
 # -------------------------
 # HELP
 # -------------------------
@@ -54,7 +69,7 @@ OPÇÕES:
   -i, --include <path>     Incluir apenas caminhos específicos
   -e, --exclude <path>     Excluir caminhos específicos
   -nh, --no-hidden         Ignorar arquivos ocultos
-
+  -n,  --dry-run           Simular Pocessamento(não gera arquivos)
   -m, --minimal            Modo leve (ignora diretórios pesados)
   -l, --logs               Mostrar arquivos sendo processados
 
@@ -139,6 +154,7 @@ while [[ $# -gt 0 ]]; do
         -nh|--no-hidden) IGNORE_HIDDEN=true ;;
         -m|--minimal) MINIMAL_MODE=true ;;
         -l|--logs) LOGS=true ;;
+        -C|--copy) COPY_TO_CLIPBOARD=true ;;
         -j|--json) FORMAT="json"; OUTPUT="combinado.json" ;;
         -nj|--ndjson) FORMAT="ndjson"; OUTPUT="combinado.ndjson" ;;
         -T|--tree) FORMAT="tree"; OUTPUT="estrutura.txt" ;;
@@ -147,6 +163,7 @@ while [[ $# -gt 0 ]]; do
         --ext) EXTENSIONS="$2"; shift ;;
         --lang) LANGUAGE="$2"; shift ;;
         --max-size) MAX_SIZE="$2"; shift ;;
+        -n|--dry-run) DRY_RUN=true ;;
         -c|--compress) COMPRESS=true ;;
         *) echo "Parâmetro desconhecido: $1"; exit 1 ;;
     esac
@@ -234,17 +251,19 @@ fi
 # -------------------------
 # CONCAT MODES
 # -------------------------
-> "$OUTPUT"
-[[ "$FORMAT" == "json" ]] && echo '{ "files": [' >> "$OUTPUT"
+# Criar um arquivo temporário para montagem
+TEMP_OUTPUT=$(mktemp)
+
+[[ "$FORMAT" == "json" ]] && echo '{ "files": [' >> "$TEMP_OUTPUT"
 
 FIND_CMD=(find . -type f ! -path "./.git/*" ! -name "$OUTPUT")
-
 $IGNORE_HIDDEN && FIND_CMD+=( ! -path "*/.*" )
-
 for path in "${EXCLUDE[@]}"; do
     FIND_CMD+=( ! -path "./$path/*" )
 done
 
+# Array para armazenar lista de arquivos processados para o sumário
+PROCESSED_FILES=()
 COUNT=0
 TOTAL_LINES=0
 FIRST=true
@@ -252,44 +271,44 @@ FIRST=true
 while IFS= read -r -d '' arquivo; do
     rel="${arquivo#./}"
 
-    # --- FILTROS ---
-    # INCLUDE
+    # --- FILTROS (Mantenha sua lógica original aqui) ---
     if [[ ${#INCLUDE[@]} -gt 0 ]]; then
         match=false
-        for inc in "${INCLUDE[@]}"; do
-            [[ "$rel" == "$inc"* ]] && match=true && break
-        done
+        for inc in "${INCLUDE[@]}"; do [[ "$rel" == "$inc"* ]] && match=true && break; done
         $match || continue
     fi
 
-    # EXTENSION / LANG
-    if [[ -n "$EXTENSIONS" ]]; then
-        match=false
-        IFS=',' read -ra exts <<< "$EXTENSIONS"
-        for ext in "${exts[@]}"; do
-            [[ "$arquivo" == *.$ext ]] && match=true && break
-        done
-        $match || continue
-    fi
-
-    # MAX SIZE
-    if [[ -n "$MAX_SIZE" ]]; then
-        if ! find "$arquivo" -size "-$MAX_SIZE" | grep -q .; then
-            $LOGS && echo "⏭️ grande: $rel"
-            continue
-        fi
-    fi
-
-    # BINÁRIO
-    if file --mime "$arquivo" | grep -q binary; then
-        $LOGS && echo "⏭️ binário: $rel"
+    if $DRY_RUN; then
+        echo "🔍 [DRY-RUN] Incluído: $rel"
+        ((COUNT++))
         continue
     fi
 
+    # --- FILTRO DE ENTROPIA (Ignora minificados) ---
+    if [[ "$FORMAT" == "txt" ]]; then
+        score=$(calculate_entropy "$arquivo")
+        if [[ "$score" -lt 5 ]]; then # Ajuste este threshold conforme necessário
+            $LOGS && echo "⏭️ pulado (entropia baixa/minificado): $rel"
+            continue
+        fi
+    fi
+    if [[ -n "$EXTENSIONS" ]]; then
+        match=false
+        IFS=',' read -ra exts <<< "$EXTENSIONS"
+        for ext in "${exts[@]}"; do [[ "$arquivo" == *.$ext ]] && match=true && break; done
+        $match || continue
+    fi
+
+    if [[ -n "$MAX_SIZE" ]]; then
+        if ! find "$arquivo" -size "-$MAX_SIZE" | grep -q .; then continue; fi
+    fi
+
+    if file --mime "$arquivo" | grep -q binary; then continue; fi
+
     # --- PROCESSAMENTO ---
     $LOGS && echo "📄 $rel"
+    PROCESSED_FILES+=("$rel") # Adiciona ao sumário
     
-    # Conta linhas e soma ao total
     file_lines=$(wc -l < "$arquivo")
     TOTAL_LINES=$((TOTAL_LINES + file_lines))
 
@@ -299,29 +318,40 @@ while IFS= read -r -d '' arquivo; do
                 printf "===== %s =====\n" "$rel"
                 cat "$arquivo"
                 printf "\n"
-            } >> "$OUTPUT"
+            } >> "$TEMP_OUTPUT"
             ;;
         json)
-            $FIRST || echo ',' >> "$OUTPUT"
+            $FIRST || echo ',' >> "$TEMP_OUTPUT"
             FIRST=false
-            printf '{ "path":"%s","content":"' "$rel" >> "$OUTPUT"
-            tr -d '\000' < "$arquivo" | escape_json >> "$OUTPUT"
-            printf '" }' >> "$OUTPUT"
+            printf '{ "path":"%s","content":"' "$rel" >> "$TEMP_OUTPUT"
+            tr -d '\000' < "$arquivo" | escape_json >> "$TEMP_OUTPUT"
+            printf '" }' >> "$TEMP_OUTPUT"
             ;;
         ndjson)
-            printf '{"path":"%s","content":"' "$rel" >> "$OUTPUT"
-            tr -d '\000' < "$arquivo" | escape_json >> "$OUTPUT"
-            printf '"}\n' >> "$OUTPUT"
+            printf '{"path":"%s","content":"' "$rel" >> "$TEMP_OUTPUT"
+            tr -d '\000' < "$arquivo" | escape_json >> "$TEMP_OUTPUT"
+            printf '"}\n' >> "$TEMP_OUTPUT"
             ;;
     esac
-
     ((COUNT++))
 done < <("${FIND_CMD[@]}" -print0)
 
-[[ "$FORMAT" == "json" ]] && echo '] }' >> "$OUTPUT"
+[[ "$FORMAT" == "json" ]] && echo '] }' >> "$TEMP_OUTPUT"
+
+# --- ADICIONAR SUMÁRIO (APENAS PARA TXT) ---
+if [[ "$FORMAT" == "txt" ]]; then
+    FINAL_CONTENT=$(mktemp)
+    echo "--- SUMÁRIO DE ARQUIVOS ($COUNT arquivos) ---" > "$FINAL_CONTENT"
+    printf "%s\n" "${PROCESSED_FILES[@]}" >> "$FINAL_CONTENT"
+    echo "-------------------------------------------" >> "$FINAL_CONTENT"
+    cat "$TEMP_OUTPUT" >> "$FINAL_CONTENT"
+    mv "$FINAL_CONTENT" "$OUTPUT"
+    rm "$TEMP_OUTPUT"
+else
+    mv "$TEMP_OUTPUT" "$OUTPUT"
+fi
 
 echo "✔ $COUNT arquivos ($TOTAL_LINES linhas) → $OUTPUT"
-
 
 # -------------------------
 # COMPRESS & ESTATÍSTICAS
@@ -337,14 +367,35 @@ else
     FINAL_OUTPUT="$OUTPUT"
 fi
 
-# Exibir Estatísticas Finais
 if [[ -f "$FINAL_OUTPUT" ]]; then
     TAMANHO_BYTES=$(wc -c < "$FINAL_OUTPUT")
     TAMANHO_FORMATADO=$(format_size "$TAMANHO_BYTES")
-    
     echo "-----------------------------------"
     echo "⚖ Tamanho do arquivo: $TAMANHO_FORMATADO"
     echo "🧠 Estimativa de tokens: ~$TOKENS"
     echo "📊 Total processado: $COUNT arquivos ($TOTAL_LINES linhas)"
     echo "-----------------------------------"
+fi
+
+# Finalizar se for Dry Run
+if $DRY_RUN; then
+    echo "-----------------------------------"
+    echo "🧪 Dry-run finalizado. Nenhum arquivo foi modificado."
+    echo "📊 Total de arquivos que seriam processados: $COUNT"
+    exit 0
+fi
+
+# -------------------------
+# CLIPBOARD
+# -------------------------
+if $COPY_TO_CLIPBOARD; then
+    if command -v xclip >/dev/null 2>&1; then
+        cat "$OUTPUT" | xclip -selection clipboard
+        echo "📋 Conteúdo copiado para o clipboard (xclip)."
+    elif command -v pbcopy >/dev/null 2>&1; then
+        cat "$OUTPUT" | pbcopy
+        echo "📋 Conteúdo copiado para o clipboard (pbcopy)."
+    else
+        echo "⚠️ Erro: Comando de clipboard (xclip ou pbcopy) não encontrado."
+    fi
 fi
