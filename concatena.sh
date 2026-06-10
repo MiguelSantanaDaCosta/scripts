@@ -46,14 +46,13 @@ COPY_TO_CLIPBOARD=false
 # -------------------------
 # Clipboard e Entropia
 # -------------------------
-# Retorna uma pontuação de 0 a 100. Valores muito baixos indicam "minificação" (código ilegível)
+
 calculate_entropy() {
-    local file=$1
-    local total=$(wc -c < "$file")
-    [[ "$total" -eq 0 ]] && echo 0 && return
-    local unique=$(tr -dc '[:print:]' < "$file" | fold -w1 | sort -u | wc -l)
-    echo $(( (unique * 100) / total ))
+    echo 100
 }
+
+
+
 
 # -------------------------
 # HELP
@@ -283,6 +282,8 @@ while IFS= read -r -d '' arquivo; do
         ((COUNT++))
         continue
     fi
+    
+
 
     # --- FILTRO DE ENTROPIA (Ignora minificados) ---
     if [[ "$FORMAT" == "txt" ]]; then
