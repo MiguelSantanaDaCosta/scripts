@@ -44,17 +44,6 @@ map_lang() {
 COPY_TO_CLIPBOARD=false
 
 # -------------------------
-# Clipboard e Entropia
-# -------------------------
-
-calculate_entropy() {
-    echo 100
-}
-
-
-
-
-# -------------------------
 # HELP
 # -------------------------
 show_help() {
@@ -270,7 +259,19 @@ FIRST=true
 while IFS= read -r -d '' arquivo; do
     rel="${arquivo#./}"
 
-    # --- FILTROS (Mantenha sua lógica original aqui) ---
+    # 1. FILTRAR EXTENSÕES BINÁRIAS EXPLICITAMENTE (Imagens, PDFs, etc)
+    case "${rel##*.}" in
+        png|jpg|jpeg|gif|ico|pdf|zip|tar|gz|xz|7z|exe|dll|so|o|bin)
+            continue
+            ;;
+    esac
+
+    # 2. SEGUNDA TRAVA: FILTRO MIME (Para pegar o resto dos binários e arquivos inválidos)
+    if file --mime "$arquivo" | grep -qE "binary|charset=binary"; then 
+        continue 
+    fi
+
+    # --- FILTROS (Includes / Regras do projeto) ---
     if [[ ${#INCLUDE[@]} -gt 0 ]]; then
         match=false
         for inc in "${INCLUDE[@]}"; do [[ "$rel" == "$inc"* ]] && match=true && break; done
@@ -283,16 +284,6 @@ while IFS= read -r -d '' arquivo; do
         continue
     fi
     
-
-
-    # --- FILTRO DE ENTROPIA (Ignora minificados) ---
-    if [[ "$FORMAT" == "txt" ]]; then
-        score=$(calculate_entropy "$arquivo")
-        if [[ "$score" -lt 5 ]]; then # Ajuste este threshold conforme necessário
-            $LOGS && echo "⏭️ pulado (entropia baixa/minificado): $rel"
-            continue
-        fi
-    fi
     if [[ -n "$EXTENSIONS" ]]; then
         match=false
         IFS=',' read -ra exts <<< "$EXTENSIONS"
@@ -303,8 +294,6 @@ while IFS= read -r -d '' arquivo; do
     if [[ -n "$MAX_SIZE" ]]; then
         if ! find "$arquivo" -size "-$MAX_SIZE" | grep -q .; then continue; fi
     fi
-
-    if file --mime "$arquivo" | grep -q binary; then continue; fi
 
     # --- PROCESSAMENTO ---
     $LOGS && echo "📄 $rel"
@@ -403,5 +392,3 @@ if $DRY_RUN; then
     echo "📊 Total de arquivos que seriam processados: $COUNT"
     exit 0
 fi
-
-
